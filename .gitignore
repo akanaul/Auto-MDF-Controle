@@ -29,7 +29,9 @@ wheels/
 .installed.cfg
 *.egg
 
-# IDE e editores
+# Arquivos de controle git
+.gitignore
+.gitkeep
 .vscode/
 .idea/
 *.swp
@@ -48,6 +50,7 @@ Thumbs.db
 *.log
 *.xlsx
 *.csv
+*.pdf
 
 # Exceções - arquivos importantes que devem ser versionados
 !BASE.csv
