@@ -1,0 +1,119 @@
+╔════════════════════════════════════════════════════════════╗
+║                                                            ║
+║     GERADOR DE PLANILHA DE MDFs                           ║
+║     Auto-Configurável e Auto-Executável                  ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🚀 COMO COMEÇAR                                             │
+└─────────────────────────────────────────────────────────────┘
+
+1️⃣  PRIMEIRA VEZ? SUPER SIMPLES!
+   
+   ✓ Clique duas vezes em: executar.bat
+   
+   → O programa irá automaticamente:
+      • Criar ambiente virtual (.venv)
+      • Instalar todas as dependências
+      • Executar o programa
+
+2️⃣  PRÓXIMAS VEZES
+   
+   ✓ Apenas clique em executar.bat novamente
+   
+   → O programa irá:
+      • Verificar integridade
+      • Executar direto
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📁 ARQUIVOS IMPORTANTES                                     │
+└─────────────────────────────────────────────────────────────┘
+
+executar.bat ⭐              ← Clique aqui para executar
+executar.ps1                 ← Alternativa em PowerShell
+verificar_integridade.py     ← Verificar setup
+gerar_planilha.py            ← Programa principal
+requirements.txt             ← Dependências
+README.md                     ← Documentação completa
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ ⚙️  CONFIGURAÇÃO AUTOMÁTICA                                 │
+└─────────────────────────────────────────────────────────────┘
+
+✅ Virtual Environment (.venv)
+   → Criado automaticamente na primeira execução
+   → Isolado do Python do sistema
+
+✅ Dependências
+   → pandas        ≥ 1.0.0
+   → pdfplumber    ≥ 0.7.0  
+   → openpyxl      ≥ 3.0.0
+
+✅ Verificação de Integridade
+   → Verifica Python version
+   → Valida pacotes instalados
+   → Confirma arquivos necessários
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🎯 FUNCIONALIDADES                                          │
+└─────────────────────────────────────────────────────────────┘
+
+✓ Extrai automaticamente de PDFs:
+  • DT (Documento de Transporte)
+  • CTE (Conhecimento de Transporte Eletrônico)
+  • MDFE (Manifesto Eletrônico de Documentos Fiscais)
+  • NF (Nota Fiscal) - com barras /
+  • Carreta (placa do veículo)
+  • Hora de emissão
+
+✓ Lê dados da planilha de escala:
+  • Motorista
+  • FROTA
+  • Horário de escala
+
+✓ Gera saídas automáticas:
+  • CSV (na raiz e arquivado em CSV/)
+  • Excel (na raiz e arquivado em EXCEL/)
+  • Limpeza automática de arquivos antigos
+
+✓ Detecta automaticamente:
+  • Qualquer arquivo Excel começando com "ESCALA"
+  • PDFs em múltiplas subpastas (SOROCABA, ITU, OUTRAS ORI-DES)
+  • Origem/Destino por subfolder
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ 💡 DICAS                                                    │
+└─────────────────────────────────────────────────────────────┘
+
+1. Não tem Python?
+   → Instale de: https://www.python.org/downloads/
+   
+2. Erro de permissões?
+   → Execute o terminal como administrador
+   
+3. Adicionar nova dependência?
+   → Edite requirements.txt e execute executar.bat novamente
+   
+4. Verificar se tudo está OK?
+   → Execute: python verificar_integridade.py
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📞 SUPORTE                                                  │
+└─────────────────────────────────────────────────────────────┘
+
+Se houver problemas, verifique:
+• README.md para troubleshooting completo
+• Se a pasta MDFs geradas/[SUBFOLDER] contém PDFs
+• Se BASE.csv está na raiz
+• Se uma planilha com nome começando em "ESCALA" existe
+
+
+═══════════════════════════════════════════════════════════════
+Versão: 1.0 | 21/12/2025
+═══════════════════════════════════════════════════════════════
