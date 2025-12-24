@@ -55,3 +55,5 @@ Thumbs.db
 # Exceções - arquivos importantes que devem ser versionados
 !BASE.csv
 !.gitkeep
+# Permitir planilhas de escala que começam com 'ESCALA' (ex.: ESCALA MOTORISTAS 2025.xlsx)
+!ESCALA*.xlsx

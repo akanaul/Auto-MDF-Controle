@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import simpledialog, messagebox
 import glob
 from pathlib import Path
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 
@@ -368,15 +368,46 @@ remover_arquivos_antigos(BASE_PATH, 'PLANILHA MDFS *.xlsx')
 
 # Carregar dados base
 print("\nCarregando dados base...")
-try:
-    df_base = pd.read_csv(BASE_CSV, encoding='latin-1', nrows=0)
-    colunas_base = df_base.columns.tolist()
-except Exception as e:
-    print(f"Erro ao ler BASE.csv: {e}")
-    colunas_base = []
+import unicodedata
+
+def _try_read_base_headers(path):
+    encodings = ['utf-8', 'latin-1', 'cp1252']
+    last_exc = None
+    for enc in encodings:
+        try:
+            df_base = pd.read_csv(path, encoding=enc, nrows=0)
+            cols = df_base.columns.tolist()
+            # Remover BOM se presente
+            cols = [str(c).lstrip('\ufeff') for c in cols]
+            print(f"[OK] BASE.csv lido com encoding: {enc}")
+            return cols, enc
+        except Exception as e:
+            last_exc = e
+    print(f"Erro ao ler BASE.csv com encodings testados: {last_exc}")
+    return [], None
+
+colunas_base, _base_encoding = _try_read_base_headers(BASE_CSV)
+
+# Normalização utilitária para comparação tolerante de nomes de colunas
+def _normalize(s):
+    if s is None:
+        return ''
+    s = str(s)
+    s = s.strip()
+    # Remover acentos e caracteres especiais
+    s = unicodedata.normalize('NFKD', s)
+    s = ''.join(c for c in s if not unicodedata.combining(c))
+    return s.upper()
 
 try:
-    df_motoristas = pd.read_excel(EXCEL_FILE, sheet_name=0, engine='openpyxl')
+    # Carregar a planilha com data_only=True para garantir que valores calculados por fórmulas sejam lidos (copiando valores, não fórmulas)
+    wb_escala = load_workbook(EXCEL_FILE, data_only=True)
+    ws_escala = wb_escala.active
+    data_iter = ws_escala.values
+    headers = next(data_iter)
+    # Normalizar cabeçalhos para string
+    headers = [str(h).strip() if h is not None else '' for h in headers]
+    df_motoristas = pd.DataFrame(data_iter, columns=headers)
 except Exception as e:
     print(f"Erro ao ler arquivo de escala: {e}")
     df_motoristas = pd.DataFrame()
@@ -387,28 +418,66 @@ print("\nProcessando motoristas...")
 motoristas_lista = []
 motoristas_escala = {}
 motoristas_frota = {}
+motoristas_nome_completo = {}
+motoristas_gpid = {}
+motoristas_cpf = {}
 
-for idx, mot in enumerate(df_motoristas['MOTORISTA'].dropna()):
-    mot_limpo = re.sub(r'\s*\(.*?\)', '', str(mot)).strip()
-    
-    if mot_limpo:
-        motoristas_lista.append(mot_limpo)
-        
-        try:
-            motoristas_escala[mot_limpo] = df_motoristas.iloc[idx]['ESCALA']
-            if pd.isna(motoristas_escala[mot_limpo]):
-                motoristas_escala[mot_limpo] = ''
-        except:
-            motoristas_escala[mot_limpo] = ''
-        
-        try:
-            motoristas_frota[mot_limpo] = df_motoristas.iloc[idx]['FROTA']
-            if pd.isna(motoristas_frota[mot_limpo]):
-                motoristas_frota[mot_limpo] = ''
-        except:
-            motoristas_frota[mot_limpo] = ''
+# Construir mapa de cabeçalhos normalizados -> nome real
+col_map = { _normalize(c): c for c in df_motoristas.columns }
+
+def _get_row_val(row, desired_col):
+    key = _normalize(desired_col)
+    actual = col_map.get(key)
+    if actual is None:
+        return ''
+    try:
+        v = row.get(actual, '')
+        if pd.isna(v):
+            return ''
+        return str(v).strip()
+    except Exception:
+        return ''
+
+# Função para encontrar motorista correspondente a um nome de PDF usando regras tolerantes
+def _find_motorista_for(pdf_name):
+    pdf_n = _normalize(pdf_name)
+    # 1) exata
+    for mot in motoristas_lista:
+        if _normalize(mot) == pdf_n:
+            return mot
+    # 2) token / startswith / contains
+    for mot in motoristas_lista:
+        mot_n = _normalize(mot)
+        tokens = mot_n.split()
+        if pdf_n in tokens:
+            return mot
+        if mot_n.startswith(pdf_n):
+            return mot
+        if pdf_n in mot_n:
+            return mot
+    return None
+
+for _, row in df_motoristas.iterrows():
+    mot_raw = _get_row_val(row, 'MOTORISTA')
+    if not mot_raw:
+        continue
+    mot_limpo = re.sub(r'\s*\(.*?\)', '', mot_raw).strip()
+    if not mot_limpo:
+        continue
+
+    motoristas_lista.append(mot_limpo)
+    motoristas_escala[mot_limpo] = _get_row_val(row, 'ESCALA')
+    motoristas_frota[mot_limpo] = _get_row_val(row, 'FROTA')
+    motoristas_nome_completo[mot_limpo] = _get_row_val(row, 'NOME COMPLETO')
+    motoristas_gpid[mot_limpo] = _get_row_val(row, 'GPID')
+    motoristas_cpf[mot_limpo] = _get_row_val(row, 'CPF')
 
 print(f"Motoristas encontrados: {len(motoristas_lista)}")
+if len(motoristas_lista) == 0:
+    print("DEBUG: Cabeçalhos na planilha de escala:", df_motoristas.columns.tolist())
+    print("DEBUG: Primeiras 5 linhas da planilha de escala:")
+    for i, r in enumerate(df_motoristas.head(5).to_dict(orient='records')):
+        print(f"  {i+1}: {r}")
 
 
 # Encontrar PDFs
@@ -455,16 +524,36 @@ dados_novos = []
 for pdf_nome in pdfs:
     pdf_limpo = re.sub(r'\s*\(.*?\)', '', pdf_nome).strip().upper()
     
-    # Procurar motorista correspondente
+    # Procurar motorista correspondente (regras tolerantes)
     motorista_encontrado = None
+    pdf_norm = pdf_limpo
+
+    # 1) igualdade normalizada
     for mot in motoristas_lista:
-        if pdf_limpo == mot.upper():
+        if _normalize(mot) == _normalize(pdf_norm):
             motorista_encontrado = mot
+            matched_by = 'exact'
             break
-    
+
+    # 2) token / prefix / contains
     if not motorista_encontrado:
-        print(f"✗ {pdf_limpo} NÃO encontrado no Excel")
+        for mot in motoristas_lista:
+            mot_n = _normalize(mot)
+            pdf_n = _normalize(pdf_norm)
+            tokens = mot_n.split()
+            if pdf_n in tokens or mot_n.startswith(pdf_n) or pdf_n in mot_n:
+                motorista_encontrado = mot
+                matched_by = 'token/contains'
+                break
+
+    if not motorista_encontrado:
+        print(f"X {pdf_limpo} NAO encontrado no Excel")
         continue
+    else:
+        # debug menor quando a correspondência foi por contains (menos segura)
+        if 'matched_by' in locals() and matched_by != 'exact':
+            print(f"[WARN] {pdf_limpo} casou com {motorista_encontrado} (metodo: {matched_by})")
+
     
     # Criar linha com dados estruturados
     linha = {col: '' for col in colunas_base}
@@ -472,6 +561,10 @@ for pdf_nome in pdfs:
     # Preencher informações básicas
     linha['DATA'] = data_arquivo
     linha['MOTORISTA'] = motorista_encontrado
+    # Preencher nome completo, gpid e cpf (valores copiados da planilha de escala)
+    linha['NOME COMPLETO'] = motoristas_nome_completo.get(motorista_encontrado, '')
+    linha['GPID'] = motoristas_gpid.get(motorista_encontrado, '')
+    linha['CPF'] = motoristas_cpf.get(motorista_encontrado, '')
     linha['HORA ESCALA (P2)'] = motoristas_escala.get(motorista_encontrado, '')
     linha['FROTA (P2)'] = motoristas_frota.get(motorista_encontrado, '')
     
@@ -504,8 +597,29 @@ for pdf_nome in pdfs:
 if dados_novos:
     print("\nGerando arquivos...")
     df_novo = pd.DataFrame(dados_novos)
-    df_novo = df_novo[colunas_base]
-    
+
+    # Garantir que todas as colunas da BASE existam no DataFrame de saída
+    missing_cols = [c for c in colunas_base if c not in df_novo.columns]
+    if missing_cols:
+        print(f"⚠️ Colunas ausentes no DataFrame gerado (serão criadas vazias): {missing_cols}")
+        for c in missing_cols:
+            df_novo[c] = ''
+
+        # Tentar realinhar colunas por correspondência tolerante (normalizada)
+        col_map = { _normalize(c): c for c in df_novo.columns }
+        desired_cols = []
+        for c in colunas_base:
+            nc = _normalize(c)
+            if nc in col_map:
+                desired_cols.append(col_map[nc])
+            else:
+                desired_cols.append(c)
+
+        # Reindex com as colunas esperadas da BASE (criadas vazias se necessário)
+        df_novo = df_novo.reindex(columns=desired_cols)
+    else:
+        df_novo = df_novo[colunas_base]
+
     # Salvar CSV
     try:
         df_novo.to_csv(csv_path_raiz, index=False, encoding='latin-1')
@@ -553,15 +667,15 @@ if dados_novos:
     
     try:
         messagebox.showinfo(
-            "Sucesso! ✓",
+            "Sucesso! OK",
             f"Automação concluída com sucesso!\n\n"
             f"Registros: {len(df_novo)}\n\n"
             f"Arquivos:\n"
-            f"  • {csv_filename}\n"
-            f"  • {excel_filename}\n\n"
+            f"  - {csv_filename}\n"
+            f"  - {excel_filename}\n\n"
             f"Salvos em:\n"
-            f"  • Raiz do programa\n"
-            f"  • Pastas CSV/ e EXCEL/"
+            f"  - Raiz do programa\n"
+            f"  - Pastas CSV/ e EXCEL/"
         )
     except Exception as e:
         print(f"[AVISO] Dialog não exibido: {e}")
@@ -572,12 +686,12 @@ else:
     
     try:
         messagebox.showerror(
-            "Erro! ✗",
+            "Erro! X",
             "Nenhum motorista foi encontrado.\n\n"
             "Verifique:\n"
-            "  ✓ Se existe arquivo começando com 'ESCALA'\n"
-            "  ✓ Se existem PDFs nas subpastas\n"
-            "  ✓ Se os nomes dos PDFs correspondem aos motoristas"
+            "  - Se existe arquivo começando com 'ESCALA'\n"
+            "  - Se existem PDFs nas subpastas\n"
+            "  - Se os nomes dos PDFs correspondem aos motoristas"
         )
     except Exception as e:
         print(f"[AVISO] Dialog não exibido: {e}")
