@@ -505,12 +505,43 @@ if dados_novos:
             for col_num, cell_value in enumerate(row_data, 1):
                 ws.cell(row=row_num, column=col_num, value=cell_value)
         
-        wb.save(excel_path_raiz)
-        print(f"[OK] Excel criado na raiz: {excel_filename}")
-        
-        # Salvar Excel no histórico (pasta EXCEL)
-        wb.save(excel_path_historico)
-        print(f"[OK] Excel arquivado: {os.path.join('EXCEL', excel_filename)}")
+        # Tentar remover arquivo existente antes de salvar para evitar PermissionError
+        try:
+            if os.path.exists(excel_path_raiz):
+                try:
+                    os.remove(excel_path_raiz)
+                except Exception:
+                    # Arquivo possivelmente aberto por outro programa (Excel). Salvar com sufixo.
+                    excel_path_raiz_tmp = excel_path_raiz.replace('.xlsx', ' (novo).xlsx')
+                    wb.save(excel_path_raiz_tmp)
+                    print(f"[AVISO] Arquivo Excel estava em uso. Salvo como: {os.path.basename(excel_path_raiz_tmp)}")
+                else:
+                    wb.save(excel_path_raiz)
+                    print(f"[OK] Excel criado na raiz: {excel_filename}")
+            else:
+                wb.save(excel_path_raiz)
+                print(f"[OK] Excel criado na raiz: {excel_filename}")
+
+            # Salvar Excel no histórico (pasta EXCEL) — também tentar remover antes
+            try:
+                if os.path.exists(excel_path_historico):
+                    try:
+                        os.remove(excel_path_historico)
+                    except Exception:
+                        excel_path_hist_tmp = excel_path_historico.replace('.xlsx', ' (novo).xlsx')
+                        wb.save(excel_path_hist_tmp)
+                        print(f"[AVISO] Excel histórico estava em uso. Salvo como: {os.path.join('EXCEL', os.path.basename(excel_path_hist_tmp))}")
+                    else:
+                        wb.save(excel_path_historico)
+                        print(f"[OK] Excel arquivado: {os.path.join('EXCEL', excel_filename)}")
+                else:
+                    wb.save(excel_path_historico)
+                    print(f"[OK] Excel arquivado: {os.path.join('EXCEL', excel_filename)}")
+            except Exception as e_hist:
+                print(f"[ERRO] Não foi possível salvar Excel histórico: {e_hist}")
+        except Exception as e:
+            # Erro genérico na operação de salvar
+            print(f"[ERRO] Não foi possível criar/salvar Excel: {e}")
     except Exception as e:
         print(f"[ERRO] Não foi possível criar/salvar Excel: {e}")
     
