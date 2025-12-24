@@ -135,22 +135,75 @@ except Exception as e:
 motoristas_lista = []
 motoristas_dict = {}  # Dicionário para mapear nome limpo -> escala
 motoristas_frota_dict = {}  # Dicionário para mapear nome limpo -> frota
-for idx, mot in enumerate(df_motoristas['MOTORISTA'].dropna()):
-    mot_limpo = re.sub(r'\s*\(.*?\)', '', str(mot)).strip()
+motoristas_nome_completo_dict = {}  # mapear nome limpo -> NOME COMPLETO (valor, fórmulas já avaliadas pelo pandas)
+motoristas_cpf_dict = {}  # mapear nome limpo -> CPF
+motoristas_gpid_dict = {}  # mapear nome limpo -> GPID
+
+# Forçar uso da coluna 'NOME' como a fonte dos nomes dos motoristas
+if 'NOME' in df_motoristas.columns:
+    name_column = 'NOME'
+else:
+    # Avisar que a coluna 'NOME' não existe e usar 'MOTORISTA' como fallback
+    print("[AVISO] Coluna 'NOME' não encontrada na planilha de escala. Usando 'MOTORISTA' como fallback.")
+    name_column = 'MOTORISTA'
+
+# Para correspondência com os nomes usados nos PDFs, preferir a coluna 'MOTORISTA' quando disponível
+if 'MOTORISTA' in df_motoristas.columns:
+    match_column = 'MOTORISTA'
+else:
+    match_column = name_column
+
+# Iterar linhas de forma segura usando o índice do DataFrame
+for idx in df_motoristas.index:
+    # Valor usado para correspondência com os PDFs
+    try:
+        mot_match = df_motoristas.at[idx, match_column]
+    except Exception:
+        continue
+    if pd.isna(mot_match):
+        continue
+    mot_limpo = re.sub(r'\s*\(.*?\)', '', str(mot_match)).strip()
+    # Valor da coluna 'NOME' (nome completo) usado apenas para preencher o campo NOME COMPLETO
+    try:
+        mot_nome_completo = df_motoristas.at[idx, 'NOME'] if 'NOME' in df_motoristas.columns and pd.notna(df_motoristas.at[idx, 'NOME']) else ''
+    except Exception:
+        mot_nome_completo = ''
     if mot_limpo:  # Apenas adicionar se não estiver vazio
         motoristas_lista.append(mot_limpo)
+        # Guardar a escala para cada motorista
         try:
-            # Guardar a escala para cada motorista
-            escala = df_motoristas.iloc[idx]['ESCALA'] if pd.notna(df_motoristas.iloc[idx]['ESCALA']) else ''
+            escala = df_motoristas.at[idx, 'ESCALA'] if 'ESCALA' in df_motoristas.columns and pd.notna(df_motoristas.at[idx, 'ESCALA']) else ''
             motoristas_dict[mot_limpo] = escala
-        except:
+        except Exception:
             motoristas_dict[mot_limpo] = ''
+        # Guardar a frota para cada motorista (com validação)
         try:
-            # Guardar a frota para cada motorista (com validação)
-            frota = df_motoristas.iloc[idx]['FROTA'] if pd.notna(df_motoristas.iloc[idx]['FROTA']) else ''
+            frota = df_motoristas.at[idx, 'FROTA'] if 'FROTA' in df_motoristas.columns and pd.notna(df_motoristas.at[idx, 'FROTA']) else ''
             motoristas_frota_dict[mot_limpo] = frota
-        except:
+        except Exception:
             motoristas_frota_dict[mot_limpo] = ''
+
+        # Tentar extrair NOME COMPLETO, CPF e GPID da planilha de escala
+        try:
+            nome_completo = mot_nome_completo if mot_nome_completo else (df_motoristas.at[idx, 'NOME COMPLETO'] if 'NOME COMPLETO' in df_motoristas.columns and pd.notna(df_motoristas.at[idx, 'NOME COMPLETO']) else '')
+        except Exception:
+            nome_completo = ''
+        try:
+            cpf = df_motoristas.at[idx, 'CPF'] if 'CPF' in df_motoristas.columns and pd.notna(df_motoristas.at[idx, 'CPF']) else ''
+        except Exception:
+            cpf = ''
+        try:
+            gpid = df_motoristas.at[idx, 'GPID'] if 'GPID' in df_motoristas.columns and pd.notna(df_motoristas.at[idx, 'GPID']) else ''
+        except Exception:
+            gpid = ''
+
+        # Se NOME COMPLETO estiver vazio, usar valor da coluna de nome detectada como fallback
+        if not nome_completo:
+            nome_completo = mot_limpo
+
+        motoristas_nome_completo_dict[mot_limpo] = nome_completo
+        motoristas_cpf_dict[mot_limpo] = cpf
+        motoristas_gpid_dict[mot_limpo] = gpid
 
 print(f"Motoristas cadastrados: {motoristas_lista}")
 
@@ -432,6 +485,10 @@ for pdf_nome in pdfs:
         linha['HORA ESCALA (P2)'] = motoristas_dict.get(motorista_encontrado, '')
         # Preencher a frota do motorista (com validação do motorista)
         linha['FROTA (P2)'] = motoristas_frota_dict.get(motorista_encontrado, '')
+        # Preencher NOME COMPLETO, CPF e GPID com valores vindos da planilha de escala
+        linha['NOME COMPLETO'] = motoristas_nome_completo_dict.get(motorista_encontrado, '')
+        linha['CPF'] = motoristas_cpf_dict.get(motorista_encontrado, '')
+        linha['GPID'] = motoristas_gpid_dict.get(motorista_encontrado, '')
         # Preencher carreta (do PDF) - CAVALO deixado como nulo
         linha['CARRETA (P2)'] = motorista_carreta_dict.get(pdf_limpo, '')
         linha['CAVALO (P2)'] = ''  # Deixar como nulo

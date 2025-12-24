@@ -28,6 +28,26 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 python gerar_planilha.py
 ```
 
+### Opção 4: VS Code (IDE)
+Se você usa o VS Code, siga estes passos rápidos para executar o projeto no ambiente integrado:
+
+1. Abra a pasta do projeto no VS Code.
+2. Abra a paleta de comandos (Ctrl+Shift+P) e escolha **Python: Select Interpreter**. Selecione o interpretador localizado em:
+
+```
+C:\Users\<seu-usuario>\Desktop\Auto Controle MDF\.venv\Scripts\python.exe
+```
+
+3. Para evitar problemas com a política de execução do PowerShell, você pode executar o script apontando diretamente para o python do `.venv` no terminal integrado:
+
+```powershell
+& "C:/Users/09487740/Desktop/Auto Controle MDF/.venv/Scripts/python.exe" ".\run_gerar_no_ui.py"
+```
+
+4. Alternativamente, abra `gerar_planilha.py` e use o botão Run no canto superior direito do editor (garantindo que o interpretador selecionado seja o do `.venv`).
+
+Observação: o wrapper `run_gerar_no_ui.py` roda `gerar_planilha.py` sem janelas de diálogo (útil para execução via IDE ou CI).
+
 ---
 
 ## 🔴 Python não está instalado?
