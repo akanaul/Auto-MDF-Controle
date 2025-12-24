@@ -62,3 +62,9 @@ PLANILHA MDFS *.xlsx
 
 # Keep base data files unless explicitly generated
 # (se quiser ignorar CSVs históricas, adicione padrões aqui)
+	# Assistant local support files (not versioned)
+	.assistant/
+
+# Ignore PDF files (untrack tracked PDFs after confirmation)
+*.pdf
+*.PDF
