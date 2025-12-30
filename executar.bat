@@ -8,12 +8,12 @@ echo GERADOR DE PLANILHA DE MDFs - LAUNCHER
 echo ============================================================
 echo.
 
-REM Define o caminho do projeto
-set PROJECT_DIR=%~dp0
-set VENV_DIR=%PROJECT_DIR%.venv
-set PYTHON_EXE=%VENV_DIR%\Scripts\python.exe
-set PIP_EXE=%VENV_DIR%\Scripts\pip.exe
-set REQUIREMENTS_FILE=%PROJECT_DIR%requirements.txt
+REM Define o caminho do projeto (com aspas para caminhos com espacos)
+set "PROJECT_DIR=%~dp0"
+set "VENV_DIR=%PROJECT_DIR%.venv"
+set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
+set "PIP_EXE=%VENV_DIR%\Scripts\pip.exe"
+set "REQUIREMENTS_FILE=%PROJECT_DIR%requirements.txt"
 
 REM ============================================================
 REM Funcao para encontrar Python
@@ -23,8 +23,8 @@ set PYTHON_FOUND=0
 
 REM Tenta usar py.exe (Python Launcher para Windows)
 py -3 --version >nul 2>&1
-if !errorlevel! equ 0 (
-    set PYTHON_CMD=py -3
+if %ERRORLEVEL% EQU 0 (
+    set "PYTHON_CMD=py -3"
     set PYTHON_FOUND=1
     echo [OK] Python encontrado via py.exe
     goto python_found
@@ -32,8 +32,8 @@ if !errorlevel! equ 0 (
 
 REM Tenta python no PATH
 python --version >nul 2>&1
-if !errorlevel! equ 0 (
-    set PYTHON_CMD=python
+if %ERRORLEVEL% EQU 0 (
+    set "PYTHON_CMD=python"
     set PYTHON_FOUND=1
     echo [OK] Python encontrado no PATH
     goto python_found
@@ -41,8 +41,8 @@ if !errorlevel! equ 0 (
 
 REM Tenta python3 no PATH
 python3 --version >nul 2>&1
-if !errorlevel! equ 0 (
-    set PYTHON_CMD=python3
+if %ERRORLEVEL% EQU 0 (
+    set "PYTHON_CMD=python3"
     set PYTHON_FOUND=1
     echo [OK] Python encontrado (python3) no PATH
     goto python_found
@@ -80,7 +80,7 @@ REM Verifica se o venv existe
 if not exist "%VENV_DIR%" (
     echo [1/3] Criando ambiente virtual...
     %PYTHON_CMD% -m venv "%VENV_DIR%"
-    if !errorlevel! neq 0 (
+    if %ERRORLEVEL% NEQ 0 (
         echo ERRO: Nao foi possivel criar o ambiente virtual.
         pause
         exit /b 1
@@ -89,20 +89,32 @@ if not exist "%VENV_DIR%" (
     echo.
 )
 
+REM Depois de criar/garantir venv, atualizar caminhos do executavel
+set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
+set "PIP_EXE=%VENV_DIR%\Scripts\pip.exe"
+
 REM Verifica e instala dependências
 echo [2/3] Verificando dependencias...
 
 REM Verifica se requirements.txt existe
 if exist "%REQUIREMENTS_FILE%" (
     echo Instalando pacotes de %REQUIREMENTS_FILE%...
-    "%PIP_EXE%" install -q -r "%REQUIREMENTS_FILE%"
-    if !errorlevel! neq 0 (
+    if exist "%PIP_EXE%" (
+        "%PIP_EXE%" install -q -r "%REQUIREMENTS_FILE%"
+    ) else (
+        "%PYTHON_EXE%" -m pip install -q -r "%REQUIREMENTS_FILE%"
+    )
+    if %ERRORLEVEL% NEQ 0 (
         echo AVISO: Alguns pacotes podem nao ter sido instalados corretamente.
     )
 ) else (
     echo Instalando dependencias padrao...
-    "%PIP_EXE%" install -q pandas pdfplumber openpyxl
-    if !errorlevel! neq 0 (
+    if exist "%PIP_EXE%" (
+        "%PIP_EXE%" install -q pandas pdfplumber openpyxl
+    ) else (
+        "%PYTHON_EXE%" -m pip install -q pandas pdfplumber openpyxl
+    )
+    if %ERRORLEVEL% NEQ 0 (
         echo AVISO: Alguns pacotes podem nao ter sido instalados corretamente.
     )
 )
@@ -112,6 +124,6 @@ echo.
 REM Executa o programa
 echo [3/3] Iniciando programa...
 echo.
-"%PYTHON_EXE%" "%PROJECT_DIR%gerar_planilha.py"
+"%PYTHON_EXE%" "%PROJECT_DIR%gerar_planilha.py" %*
 
 pause
