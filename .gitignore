@@ -1,2 +1,59 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
-*
+# Ambiente Virtual Python
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Arquivos compilados Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribuição / empacotamento
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Arquivos de controle git
+.gitignore
+.gitkeep
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Arquivos de sistema
+Thumbs.db
+.directory
+
+# Arquivos gerados/temporários na raiz e subpastas
+*.csv.bak
+*.xlsx.bak
+*.tmp
+*.log
+*.xlsx
+*.csv
+*.pdf
+
+# Exceções - arquivos importantes que devem ser versionados
+!BASE.csv
+!.gitkeep
+# Permitir planilhas de escala que começam com 'ESCALA' (ex.: ESCALA MOTORISTAS 2025.xlsx)
+!ESCALA*.xlsx

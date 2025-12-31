@@ -14,7 +14,6 @@ import glob
 from pathlib import Path
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
-import sys
 
 
 # ============================================================================
@@ -35,12 +34,6 @@ print("="*60)
 
 def solicitar_responsavel():
     """Solicita e valida o nome do responsável pela emissão"""
-    # Verificar se foi passado via argumento de linha de comando
-    if len(sys.argv) > 1 and sys.argv[1].strip():
-        responsavel = sys.argv[1].strip()
-        print(f"Responsável via argumento: {responsavel}")
-        return responsavel.upper()
-    
     while True:
         responsavel = simpledialog.askstring(
             "Responsavel pela Emissao",
@@ -350,11 +343,9 @@ usar_proxima_data = data_agora.hour >= 22
 
 if usar_proxima_data:
     data_arquivo = (data_agora + timedelta(days=1)).strftime('%d.%m.%Y')
-    data_formatada = (data_agora + timedelta(days=1)).strftime('%d/%m/%Y')
     print(f"Horário: {data_agora.strftime('%H:%M')} - Usando data do dia seguinte")
 else:
     data_arquivo = data_agora.strftime('%d.%m.%Y')
-    data_formatada = data_agora.strftime('%d/%m/%Y')
     print(f"Horário: {data_agora.strftime('%H:%M')} - Usando data de hoje")
 
 
@@ -409,79 +400,32 @@ def _normalize(s):
     return s.upper()
 
 try:
-    # Carregar a planilha - identificar todas as abas visíveis
-    from openpyxl import load_workbook
-    wb = load_workbook(EXCEL_FILE, read_only=True)
-    
-    # Encontrar todas as abas visíveis
-    visible_sheets = []
-    for sheet in wb.worksheets:
-        if sheet.sheet_state != 'hidden':
-            visible_sheets.append(sheet.title)
-    
-    wb.close()
-    
-    if len(visible_sheets) < 2:
-        raise ValueError("São necessárias pelo menos 2 abas visíveis na planilha")
-    
-    # Definir abas prioritárias
-    aba_primeira = visible_sheets[0]  # ESCALA 31.12.2025
-    aba_segunda = visible_sheets[1]   # ESCALA 30.12.2025
-    
-    print(f"[OK] Abas identificadas: 1ª='{aba_primeira}', 2ª='{aba_segunda}'")
-    
-    # Carregar dados das duas abas usando openpyxl para melhor controle
-    from openpyxl import load_workbook
-    
-    # Tentar carregar com data_only=True para obter valores calculados das fórmulas
-    try:
-        wb = load_workbook(EXCEL_FILE, data_only=True, read_only=True)
-        print("[INFO] Lendo planilha com valores calculados (data_only=True)")
-    except Exception:
-        wb = load_workbook(EXCEL_FILE, read_only=True)
-        print("[INFO] Lendo planilha com fórmulas (data_only=False)")
-    
-    # Ler primeira aba
-    sheet1 = wb[aba_primeira]
-    data1 = []
-    for i, row in enumerate(sheet1.iter_rows(values_only=True)):
-        if i == 0:  # Cabeçalho
-            headers1 = list(row)
-            continue
-        if i > 1000:  # Limitar a 1000 linhas de dados
-            break
-        if any(cell for cell in row if cell is not None):  # Só linhas não vazias
-            data1.append(list(row))
-    
-    df_primeira = pd.DataFrame(data1, columns=headers1)
-    
-    # Ler segunda aba
-    sheet2 = wb[aba_segunda]
-    data2 = []
-    for i, row in enumerate(sheet2.iter_rows(values_only=True)):
-        if i == 0:  # Cabeçalho
-            headers2 = list(row)
-            continue
-        if i > 1000:  # Limitar a 1000 linhas de dados
-            break
-        if any(cell for cell in row if cell is not None):  # Só linhas não vazias
-            data2.append(list(row))
-    
-    df_segunda = pd.DataFrame(data2, columns=headers2)
-    wb.close()
-    
-    print(f"[OK] Planilha de escala lida (1ª aba: {aba_primeira}) com {len(df_primeira)} linhas")
-    print(f"[OK] Planilha de escala lida (2ª aba: {aba_segunda}) com {len(df_segunda)} linhas")
-    
+    # Carregar a planilha com data_only=True para garantir que valores calculados por fórmulas sejam lidos (copiando valores, não fórmulas)
+    wb_escala = load_workbook(EXCEL_FILE, data_only=True)
+    ws_escala = wb_escala.active
+    data_iter = ws_escala.values
+    headers = next(data_iter)
+    # Normalizar cabeçalhos para string
+    headers = [str(h).strip() if h is not None else '' for h in headers]
+    df_motoristas = pd.DataFrame(data_iter, columns=headers)
 except Exception as e:
     print(f"Erro ao ler arquivo de escala: {e}")
-    df_primeira = pd.DataFrame()
-    df_segunda = pd.DataFrame()
+    df_motoristas = pd.DataFrame()
 
-print(f"Motoristas lidos: {len(df_primeira)} linhas (1ª aba) + {len(df_segunda)} linhas (2ª aba)")
 
-# Função auxiliar para obter valor de coluna normalizada
-def _get_row_val(row, desired_col, col_map):
+# Processar motoristas
+print("\nProcessando motoristas...")
+motoristas_lista = []
+motoristas_escala = {}
+motoristas_frota = {}
+motoristas_nome_completo = {}
+motoristas_gpid = {}
+motoristas_cpf = {}
+
+# Construir mapa de cabeçalhos normalizados -> nome real
+col_map = { _normalize(c): c for c in df_motoristas.columns }
+
+def _get_row_val(row, desired_col):
     key = _normalize(desired_col)
     actual = col_map.get(key)
     if actual is None:
@@ -494,91 +438,46 @@ def _get_row_val(row, desired_col, col_map):
     except Exception:
         return ''
 
-# Função para encontrar motorista correspondente considerando origem do PDF
-def _find_motorista_for(pdf_name, pdf_origem, df_primeira, df_segunda, aba_primeira, aba_segunda):
+# Função para encontrar motorista correspondente a um nome de PDF usando regras tolerantes
+def _find_motorista_for(pdf_name):
     pdf_n = _normalize(pdf_name)
-    
-    # Para SOROCABA e OUTRAS ORI-DES: procurar primeiro na segunda aba, depois na primeira
-    if pdf_origem in ['SOROCABA', 'OUTRAS ORI-DES']:
-        abas_prioridade = [(df_segunda, aba_segunda), (df_primeira, aba_primeira)]
-    else:
-        # Para ITU e outros: procurar na primeira aba
-        abas_prioridade = [(df_primeira, aba_primeira)]
-    
-    for df_aba, nome_aba in abas_prioridade:
-        col_map = { _normalize(c): c for c in df_aba.columns }
-        
-        # 1) exata
-        for _, row in df_aba.iterrows():
-            mot_raw = _get_row_val(row, 'MOTORISTA', col_map)
-            if mot_raw:
-                mot_limpo = re.sub(r'\s*\(.*?\)', '', mot_raw).strip()
-                if mot_limpo and _normalize(mot_limpo) == pdf_n:
-                    return mot_limpo, 'exact', nome_aba
-        
-        # 2) primeiro nome (para nomes compostos)
-        pdf_primeiro_nome = pdf_n.split()[0] if pdf_n.split() else pdf_n
-        for _, row in df_aba.iterrows():
-            mot_raw = _get_row_val(row, 'MOTORISTA', col_map)
-            if mot_raw:
-                mot_limpo = re.sub(r'\s*\(.*?\)', '', mot_raw).strip()
-                if mot_limpo and _normalize(mot_limpo) == pdf_primeiro_nome:
-                    return mot_limpo, 'primeiro_nome', nome_aba
-        
-        # 3) token / startswith / contains
-        for _, row in df_aba.iterrows():
-            mot_raw = _get_row_val(row, 'MOTORISTA', col_map)
-            if mot_raw:
-                mot_limpo = re.sub(r'\s*\(.*?\)', '', mot_raw).strip()
-                if mot_limpo:
-                    mot_n = _normalize(mot_limpo)
-                    tokens = mot_n.split()
-                    if pdf_n in tokens or pdf_primeiro_nome in tokens:
-                        return mot_limpo, 'token', nome_aba
-                    if mot_n.startswith(pdf_n) or mot_n.startswith(pdf_primeiro_nome):
-                        return mot_limpo, 'startswith', nome_aba
-                    if pdf_n in mot_n or pdf_primeiro_nome in mot_n:
-                        return mot_limpo, 'contains', nome_aba
-    
-    return None, None, None
+    # 1) exata
+    for mot in motoristas_lista:
+        if _normalize(mot) == pdf_n:
+            return mot
+    # 2) token / startswith / contains
+    for mot in motoristas_lista:
+        mot_n = _normalize(mot)
+        tokens = mot_n.split()
+        if pdf_n in tokens:
+            return mot
+        if mot_n.startswith(pdf_n):
+            return mot
+        if pdf_n in mot_n:
+            return mot
+    return None
 
-# Processar motoristas de ambas as abas
-motoristas_lista = []
-motoristas_escala = {}
-motoristas_frota = {}
-motoristas_nome_completo = {}
-motoristas_gpid = {}
-motoristas_cpf = {}
-motoristas_aba = {}  # Para rastrear de qual aba veio o motorista
+for _, row in df_motoristas.iterrows():
+    mot_raw = _get_row_val(row, 'MOTORISTA')
+    if not mot_raw:
+        continue
+    mot_limpo = re.sub(r'\s*\(.*?\)', '', mot_raw).strip()
+    if not mot_limpo:
+        continue
 
-# Função auxiliar para processar uma aba
-def _processar_aba(df, aba_nome, aba_numero):
-    col_map = { _normalize(c): c for c in df.columns }
-    
-    for _, row in df.iterrows():
-        mot_raw = _get_row_val(row, 'MOTORISTA', col_map)
-        if not mot_raw:
-            continue
-        mot_limpo = re.sub(r'\s*\(.*?\)', '', mot_raw).strip()
-        if not mot_limpo:
-            continue
+    motoristas_lista.append(mot_limpo)
+    motoristas_escala[mot_limpo] = _get_row_val(row, 'ESCALA')
+    motoristas_frota[mot_limpo] = _get_row_val(row, 'FROTA')
+    motoristas_nome_completo[mot_limpo] = _get_row_val(row, 'NOME COMPLETO')
+    motoristas_gpid[mot_limpo] = _get_row_val(row, 'GPID')
+    motoristas_cpf[mot_limpo] = _get_row_val(row, 'CPF')
 
-        # Evitar duplicatas (se motorista já existe, mantém o da primeira aba processada)
-        if mot_limpo not in motoristas_lista:
-            motoristas_lista.append(mot_limpo)
-            motoristas_escala[mot_limpo] = _get_row_val(row, 'ESCALA', col_map)
-            motoristas_frota[mot_limpo] = _get_row_val(row, 'FROTA', col_map)
-            motoristas_nome_completo[mot_limpo] = _get_row_val(row, 'NOME', col_map)
-            motoristas_gpid[mot_limpo] = _get_row_val(row, 'GPID', col_map)
-            motoristas_cpf[mot_limpo] = _get_row_val(row, 'CPF', col_map)
-            motoristas_aba[mot_limpo] = aba_nome
-
-# Processar primeira aba
-_processar_aba(df_primeira, aba_primeira, 1)
-# Processar segunda aba (sobrescreve apenas se motorista não existir)
-_processar_aba(df_segunda, aba_segunda, 2)
-
-print(f"Motoristas encontrados: {len(motoristas_lista)} (total de ambas as abas)")
+print(f"Motoristas encontrados: {len(motoristas_lista)}")
+if len(motoristas_lista) == 0:
+    print("DEBUG: Cabeçalhos na planilha de escala:", df_motoristas.columns.tolist())
+    print("DEBUG: Primeiras 5 linhas da planilha de escala:")
+    for i, r in enumerate(df_motoristas.head(5).to_dict(orient='records')):
+        print(f"  {i+1}: {r}")
 
 
 # Encontrar PDFs
@@ -625,29 +524,42 @@ dados_novos = []
 for pdf_nome in pdfs:
     pdf_limpo = re.sub(r'\s*\(.*?\)', '', pdf_nome).strip().upper()
     
-    # Obter origem do PDF
-    if pdf_limpo in pdf_localizacao:
-        pdf_origem, _ = pdf_localizacao[pdf_limpo]
-    else:
-        pdf_origem = 'DESCONHECIDA'
-    
     # Procurar motorista correspondente (regras tolerantes)
-    motorista_encontrado, matched_by, aba_encontrada = _find_motorista_for(pdf_limpo, pdf_origem, df_primeira, df_segunda, aba_primeira, aba_segunda)
+    motorista_encontrado = None
+    pdf_norm = pdf_limpo
+
+    # 1) igualdade normalizada
+    for mot in motoristas_lista:
+        if _normalize(mot) == _normalize(pdf_norm):
+            motorista_encontrado = mot
+            matched_by = 'exact'
+            break
+
+    # 2) token / prefix / contains
+    if not motorista_encontrado:
+        for mot in motoristas_lista:
+            mot_n = _normalize(mot)
+            pdf_n = _normalize(pdf_norm)
+            tokens = mot_n.split()
+            if pdf_n in tokens or mot_n.startswith(pdf_n) or pdf_n in mot_n:
+                motorista_encontrado = mot
+                matched_by = 'token/contains'
+                break
 
     if not motorista_encontrado:
-        print(f"X {pdf_limpo} [{pdf_origem}] NAO encontrado no Excel")
+        print(f"X {pdf_limpo} NAO encontrado no Excel")
         continue
     else:
         # debug menor quando a correspondência foi por contains (menos segura)
-        aba_info = f" (aba: {aba_encontrada})" if aba_encontrada else ""
-        if matched_by != 'exact':
-            print(f"[WARN] {pdf_limpo} [{pdf_origem}] casou com {motorista_encontrado} (metodo: {matched_by}){aba_info}")
-        else:
-            print(f"[OK] {pdf_limpo} [{pdf_origem}] -> {motorista_encontrado}{aba_info}")
+        if 'matched_by' in locals() and matched_by != 'exact':
+            print(f"[WARN] {pdf_limpo} casou com {motorista_encontrado} (metodo: {matched_by})")
+
+    
+    # Criar linha com dados estruturados
     linha = {col: '' for col in colunas_base}
     
     # Preencher informações básicas
-    linha['DATA'] = data_formatada
+    linha['DATA'] = data_arquivo
     linha['MOTORISTA'] = motorista_encontrado
     # Preencher nome completo, gpid e cpf (valores copiados da planilha de escala)
     linha['NOME COMPLETO'] = motoristas_nome_completo.get(motorista_encontrado, '')
@@ -658,7 +570,7 @@ for pdf_nome in pdfs:
     
     # Preencher informações do PDF
     linha['CARRETA (P2)'] = dados_pdfs['carreta'].get(pdf_limpo, '')
-    linha['CAVALO (P2)'] = dados_pdfs['cavalo'].get(pdf_limpo, '')
+    linha['CAVALO (P2)'] = ''
     linha['DT'] = dados_pdfs['dt'].get(pdf_limpo, '')
     linha['CTE (P2)'] = dados_pdfs['cte'].get(pdf_limpo, '')
     linha['Nº MDFE (P2)'] = dados_pdfs['mdfe'].get(pdf_limpo, '')
@@ -678,7 +590,7 @@ for pdf_nome in pdfs:
             linha['DESTINO (ESCALA)'] = 'DHL'
     
     dados_novos.append(linha)
-    print(f"[OK] {pdf_limpo} -> {motorista_encontrado}")
+    print(f"[OK] {pdf_limpo} → {motorista_encontrado}")
 
 
 # Gerar arquivos
