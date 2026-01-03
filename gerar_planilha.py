@@ -401,14 +401,20 @@ def extrair_carreta_cavalo_do_pdf(caminho_pdf: Path) -> Tuple[str, str]:
                 linhas = texto.split("\n")
                 for i, linha in enumerate(linhas):
                     if "Placa" in linha and "RNTRC" in linha:
-                        carreta = ""
-                        cavalo = ""
-                        if i + 1 < len(linhas):
-                            primeira = linhas[i + 1].strip().split()
-                            carreta = primeira[0] if primeira else ""
-                        if i + 2 < len(linhas):
-                            segunda = linhas[i + 2].strip().split()
-                            cavalo = segunda[0] if segunda else ""
+                        placas: List[str] = []
+                        plate_pattern = re.compile(r"\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b")
+                        for j in range(i + 1, min(len(linhas), i + 6)):
+                            tokens = linhas[j].strip().split()
+                            for token in tokens:
+                                if plate_pattern.search(token):
+                                    placas.append(token)
+                                    if len(placas) >= 2:
+                                        break
+                            if len(placas) >= 2:
+                                break
+
+                        carreta = placas[0] if placas else ""
+                        cavalo = placas[1] if len(placas) > 1 else ""
                         return carreta, cavalo
     except Exception as exc:
         print(f"  Erro ao ler PDF {caminho_pdf}: {exc}")
