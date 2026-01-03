@@ -30,9 +30,19 @@ python gerar_planilha.py
 
 ---
 
+## 🆕 Novidades da Versão 2.0
+
+- Compatibilidade corporativa reforçada: os launchers (batch e PowerShell) tentam `py.exe`, `python` e `python3` antes de falhar, e exibem instruções claras para recuperar o PATH faltante.
+- `gerar_planilha.py` agora define `BASE_PATH` automaticamente com `Path(__file__).parent`, tornando o projeto resistente a renomeações ou movimentações de pasta.
+- A documentação e as mensagens geradas destacam como lidar com computadores restritos, inclusive mostrando passos rápidos para configurar o PATH quando necessário.
+
+---
+
 ## 🔴 Python não está instalado?
 
 Se você está em um computador corporativo e vê a mensagem "Python não foi encontrado":
+
+> Os launchers agora tentam `py.exe`, `python` e `python3` antes de exibir essa mensagem; use as soluções abaixo se mesmo assim o PATH continuar vazio.
 
 **Solução 1: Instalar Python (Recomendado)**
 1. Baixe Python em https://www.python.org/downloads/
@@ -101,6 +111,8 @@ Todas instaladas automaticamente na primeira execução.
 - ✅ Limpeza de arquivos antigos na raiz
 - ✅ Interface com diálogo GUI para entrada de dados
 - ✅ Suporte a múltiplas subpastas de MDFs (SOROCABA, ITU, OUTRAS ORI-DES)
+- ✅ Compatibilidade com computadores corporativos: `executar.bat` e `executar.ps1` tentam `py.exe`, `python` e `python3` antes de emitir orientações guiadas.
+- ✅ Caminhos resilientes ao mover a pasta: `BASE_PATH` usa o diretório onde o script está sendo executado.
 
 ---
 
@@ -125,6 +137,7 @@ Todas instaladas automaticamente na primeira execução.
 	- persistência (CSV/Excel) em `salvar_saidas`
 - Helpers reutilizáveis: normalização de texto, progress bar, limpeza de arquivos antigos, cálculo de data.
 - Execução centralizada em `main()`, chamada apenas quando o arquivo é executado diretamente.
+- `BASE_PATH` é calculado como `Path(__file__).parent`, garantindo que os caminhos relativos funcionem mesmo que a pasta seja movida.
 
 Para evoluir o código, prefira adicionar novas regras dentro de `montar_registros` ou novos extratores seguindo o padrão `extrair_*`.
 
@@ -174,4 +187,4 @@ Projeto automação MDF/
 
 ---
 
-**Versão: 1.0 | Data: 21/12/2025**
+**Versão: 2.0 | Data: 03/01/2026**

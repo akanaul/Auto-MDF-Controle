@@ -1,5 +1,19 @@
 # Changelog - Auto Controle MDF
 
+## Versão 2.0.1 - Documentação e orientação
+
+### ✅ Mudanças Implementadas
+
+- Adição da seção "Novidades da Versão 2.0" no `README.md`, destacando o comportamento dos launchers e a detecção dinâmica de `BASE_PATH`.
+- Expansão das descrições sobre compatibilidade corporativa, orientação para PATH e o aviso prévio de que `py.exe`, `python` e `python3` são testados antes de alertar que o Python está ausente.
+- Atualização das listas de funcionalidades e da arquitetura do projeto para citar os reforços na compatibilidade e nos caminhos relativos.
+
+### 📋 Arquivos alterados
+
+- `README.md`
+
+---
+
 ## Versão 2.0.0 - Melhorias de Compatibilidade
 
 ### ✅ Mudanças Implementadas
