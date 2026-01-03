@@ -104,6 +104,32 @@ Todas instaladas automaticamente na primeira execução.
 
 ---
 
+## 🧭 Regras de negócio principais
+
+- SOROCABA: `MOTIVO ATRASO (P2)` fica "VETADO ANTECIPACAO DE MDF" e `HORA ESCALA (P2)` é mantido em branco.
+- ITU: ao casar motorista, prioriza a 1ª aba visível da planilha (aba mais recente). Se não encontrar, procura em qualquer aba visível.
+- ORIGEM/DESTINO: se o PDF vier de SOROCABA ou ITU, ORIGEM recebe a pasta e DESTINO recebe "DHL".
+- Veículos: `CAVALO (P2)` e `CARRETA (P2)` são lidos do PDF; `FROTA (P2)` vem da planilha da escala.
+- Identificação: nomes e aliases são normalizados (sem acento, maiúsculo) para casar PDF ↔ escala; remove conteúdo entre parênteses no nome.
+
+---
+
+## 🧱 Arquitetura do código
+
+- Arquivo único: `gerar_planilha.py` concentra o fluxo.
+- Etapas em funções puras:
+	- leitura da escala (`carregar_escala`) e mapeamento de motoristas (`preparar_motoristas`)
+	- varredura dos PDFs (`listar_pdfs`) e extrações por campo (`extrair_*`)
+	- casamento PDF ↔ motorista (`_match_motorista`) com prioridade especial para ITU
+	- montagem de linhas alinhadas ao cabeçalho do `BASE.csv` (`montar_registros`)
+	- persistência (CSV/Excel) em `salvar_saidas`
+- Helpers reutilizáveis: normalização de texto, progress bar, limpeza de arquivos antigos, cálculo de data.
+- Execução centralizada em `main()`, chamada apenas quando o arquivo é executado diretamente.
+
+Para evoluir o código, prefira adicionar novas regras dentro de `montar_registros` ou novos extratores seguindo o padrão `extrair_*`.
+
+---
+
 ## 📁 Estrutura de Pastas
 
 ```
