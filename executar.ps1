@@ -38,32 +38,30 @@ function Find-Python {
     Retorna o comando Python ou $null se não encontrar
     #>
     
-    # Tenta py.exe (Python Launcher para Windows)
-    try {
-        $output = & py -3 --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "  ✓ Python encontrado via py.exe" 'success'
-            return 'py -3'
+    $pythonCandidates = @(
+        @{ Command = 'py'; Message = "  ✓ Python encontrado via py.exe"; Return = 'py -3'; Args = @('-3') }
+        @{ Command = 'python'; Message = "  ✓ Python encontrado no PATH"; Return = 'python'; Args = @() }
+        @{ Command = 'python3'; Message = "  ✓ Python encontrado (python3) no PATH"; Return = 'python3'; Args = @() }
+    )
+
+    foreach ($candidate in $pythonCandidates) {
+        if (-not (Get-Command $candidate.Command -ErrorAction SilentlyContinue)) {
+            continue
         }
-    } catch { }
-    
-    # Tenta python no PATH
-    try {
-        $output = & python --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "  ✓ Python encontrado no PATH" 'success'
-            return 'python'
+
+        $versionArgs = @()
+        if ($candidate.Args) { $versionArgs += $candidate.Args }
+        $versionArgs += '--version'
+
+        try {
+            & $candidate.Command @versionArgs 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log $candidate.Message 'success'
+                return $candidate.Return
+            }
         }
-    } catch { }
-    
-    # Tenta python3 no PATH
-    try {
-        $output = & python3 --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "  ✓ Python encontrado (python3) no PATH" 'success'
-            return 'python3'
-        }
-    } catch { }
+        catch { }
+    }
     
     # Se nenhuma opção funcionou
     Write-Log "✗ ERRO: Python nao foi encontrado no sistema!" 'error'
